@@ -3,19 +3,21 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mroth/weightedrand/v2"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	// Config
-	routingFilePath string = "routing.json"
-	routingRules    map[string]RoutingRule
+	routingFilePath  string = "routing.json"
+	weightedChoosers map[string]*weightedrand.Chooser[string, int]
 )
 
 type RoutingRule map[string][]Upstream
@@ -33,7 +35,7 @@ func LookupEnvOrString(key string, defaultValue string) string {
 	return envVariable
 }
 
-func readConfig(fpath string) map[string]RoutingRule {
+func readConfig(fpath string) map[string]*weightedrand.Chooser[string, int] {
 	file, err := os.Open(fpath)
 	if err != nil {
 		log.Errorf("%v", err)
@@ -45,19 +47,32 @@ func readConfig(fpath string) map[string]RoutingRule {
 	}
 	var routingRules map[string]RoutingRule
 	json.Unmarshal(byteValue, &routingRules)
-	return routingRules
+
+	weightedChoosers := map[string]*weightedrand.Chooser[string, int]{}
+
+	for prefix, routingRule := range routingRules {
+		var weightedChoices []weightedrand.Choice[string, int]
+
+		for i := 0; i < len(routingRule["upstreams"]); i++ {
+			upstream := routingRule["upstreams"][i]
+			weightedChoices = append(weightedChoices, weightedrand.NewChoice(upstream.Url, upstream.Weight))
+		}
+		weightedChoosers[prefix], _ = weightedrand.NewChooser(weightedChoices...)
+	}
+
+	return weightedChoosers
 }
 
 func resolveUrl(c *gin.Context) {
 	prefix := "/" + c.Param("prefix")
 
-	upstreams, ok := routingRules[prefix]
+	chooser, ok := weightedChoosers[prefix]
 	if ok {
-		log.Info(upstreams)
+		c.JSON(200, gin.H{"route": chooser.Pick()})
 	} else {
 		log.Errorf("Prefix not found in routing rules")
+		c.JSON(404, gin.H{"detail": fmt.Sprintf("%s does not exist in the routing rules", prefix)})
 	}
-	c.JSON(200, gin.H{"route": prefix})
 }
 
 func main() {
@@ -72,7 +87,7 @@ func main() {
 	})
 
 	log.Infof("Reading routing file at %s", routingFilePath)
-	routingRules = readConfig(routingFilePath)
+	weightedChoosers = readConfig(routingFilePath)
 
 	router := gin.Default()
 	router.GET("/:prefix", resolveUrl)

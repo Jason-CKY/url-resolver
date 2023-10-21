@@ -7,7 +7,7 @@
             },
             {
                 "url": "https://test.example.site",
-                "weight": 20
+                "weight": 1
             }
         ]
     },
