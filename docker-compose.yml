@@ -1,0 +1,13 @@
+
+services:
+  url-resolver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - 8080:8080
+    volumes:
+      - ./routing.json:/routing.json
+    environment:
+      CONFIG_FPATH: /routing.json

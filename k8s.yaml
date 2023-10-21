@@ -1,0 +1,71 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: routing-rules
+data:
+  routing.json: |-
+    {
+        "/vicuna": {
+            "upstreams": [
+                {
+                    "url": "http://10.20.10.10",
+                    "weight": 1
+                },
+                {
+                    "url": "https://test.example.site",
+                    "weight": 1
+                }
+            ]
+        },
+        "/llama-2": {
+            "upstreams": [
+                {
+                    "url": "http://10.20.10.10",
+                    "weight": 1
+                },
+                {
+                    "url": "https://test.example.site",
+                    "weight": 20
+                }
+            ]
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-resolver
+  labels:
+    name: url-resolver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: url-resolver
+  template:
+    metadata:
+      labels:
+        name: url-resolver
+    spec:
+      containers:
+        - name: url-resolver
+          image: "jasoncky96/url-resolver:1.0"
+          imagePullPolicy: "Always"
+          env:
+            - name: CONFIG_FPATH
+              value: "/app/routing.json"
+          resources:
+            requests:
+              cpu: 0.5
+              memory: 30Mi
+            limits:
+              cpu: 0.5
+              memory: 30Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app
+      volumes:
+        - name: routing-rules
+          configMap:
+            name: routing-rules
