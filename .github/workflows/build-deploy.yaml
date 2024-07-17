@@ -19,6 +19,7 @@ jobs:
       - name: Test with the Go CLI
         run: go test
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
