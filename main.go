@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/mroth/weightedrand/v2"
@@ -15,9 +16,9 @@ import (
 
 var (
 	// Config
-	webPort          int    = 8080
-	routingFilePath  string = "routing.json"
-	weightedChoosers map[string]*weightedrand.Chooser[string, int]
+	webPort         int    = 8080
+	routingFilePath string = "routing.json"
+	doHealthCheck   bool   = false
 )
 
 type RoutingRule map[string][]Upstream
@@ -45,6 +46,14 @@ func LookupEnvOrInt(key string, defaultValue int) int {
 		panic(err.Error())
 	}
 	return num
+}
+
+func LookupEnvOrBool(key string, defaultValue bool) bool {
+	envVariable, exists := os.LookupEnv(key)
+	if !exists {
+		return defaultValue
+	}
+	return strings.ToLower(envVariable) == "true"
 }
 
 func readConfig(fpath string) map[string]*weightedrand.Chooser[string, int] {
@@ -75,22 +84,18 @@ func readConfig(fpath string) map[string]*weightedrand.Chooser[string, int] {
 	return weightedChoosers
 }
 
-func resolveUrl(c echo.Context) (err error) {
-	prefix := "/" + c.Param("prefix")
-
+func resolveUrl(prefix string, weightedChoosers map[string]*weightedrand.Chooser[string, int]) (route string, found bool) {
 	chooser, ok := weightedChoosers[prefix]
-	if ok {
-		return c.JSON(200, map[string]string{"route": chooser.Pick()})
-	} else {
-		log.Errorf("Prefix not found in routing rules")
-		return c.JSON(404, map[string]string{"detail": fmt.Sprintf("%s does not exist in the routing rules", prefix)})
+	if !ok {
+		return "", ok
 	}
+	return chooser.Pick(), ok
 }
 
 func main() {
 	flag.StringVar(&routingFilePath, "fpath", LookupEnvOrString("CONFIG_FPATH", routingFilePath), "Path to routing json file")
 	flag.IntVar(&webPort, "port", LookupEnvOrInt("PORT", webPort), "Port for echo web server")
-
+	flag.BoolVar(&doHealthCheck, "healthcheck", LookupEnvOrBool("HEALTHCHECK", doHealthCheck), "Whether to do healthchecks for updating routing rules. Will not route to endpoints that are not ready")
 	flag.Parse()
 
 	// setup logrus
@@ -100,10 +105,20 @@ func main() {
 	})
 
 	log.Infof("Reading routing file at %s", routingFilePath)
-	weightedChoosers = readConfig(routingFilePath)
+	weightedChoosers := readConfig(routingFilePath)
 
 	e := echo.New()
-	e.GET("/:prefix", resolveUrl)
+	e.GET("/:prefix", func(c echo.Context) error {
+		prefix := "/" + c.Param("prefix")
+		route, found := resolveUrl(prefix, weightedChoosers)
+		if found {
+			return c.JSON(200, map[string]string{"route": route})
+		} else {
+			log.Errorf("Prefix not found in routing rules")
+			return c.JSON(404, map[string]string{"detail": fmt.Sprintf("%s does not exist in the routing rules", prefix)})
+		}
+
+	})
 	e.Logger.Fatal(e.Start(fmt.Sprintf(":%v", webPort)))
 
 }
