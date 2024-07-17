@@ -4,6 +4,13 @@ Resolves an url using a routing rules in `routing.json`. Routing complex load-ba
 
 This is a simple golang api that resolves the url based on routing rules in a [json config rule file](./routing.json). 
 
+## Development
+
+```sh
+go install github.com/cosmtrek/air@latest
+air
+```
+
 ## Implementation
 
 ### Using environment variables

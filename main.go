@@ -5,17 +5,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
-	"time"
+	"strconv"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"github.com/mroth/weightedrand/v2"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	// Config
+	webPort          int    = 8080
 	routingFilePath  string = "routing.json"
 	weightedChoosers map[string]*weightedrand.Chooser[string, int]
 )
@@ -33,6 +33,18 @@ func LookupEnvOrString(key string, defaultValue string) string {
 		return defaultValue
 	}
 	return envVariable
+}
+
+func LookupEnvOrInt(key string, defaultValue int) int {
+	envVariable, exists := os.LookupEnv(key)
+	if !exists {
+		return defaultValue
+	}
+	num, err := strconv.Atoi(envVariable)
+	if err != nil {
+		panic(err.Error())
+	}
+	return num
 }
 
 func readConfig(fpath string) map[string]*weightedrand.Chooser[string, int] {
@@ -63,20 +75,21 @@ func readConfig(fpath string) map[string]*weightedrand.Chooser[string, int] {
 	return weightedChoosers
 }
 
-func resolveUrl(c *gin.Context) {
+func resolveUrl(c echo.Context) (err error) {
 	prefix := "/" + c.Param("prefix")
 
 	chooser, ok := weightedChoosers[prefix]
 	if ok {
-		c.JSON(200, gin.H{"route": chooser.Pick()})
+		return c.JSON(200, map[string]string{"route": chooser.Pick()})
 	} else {
 		log.Errorf("Prefix not found in routing rules")
-		c.JSON(404, gin.H{"detail": fmt.Sprintf("%s does not exist in the routing rules", prefix)})
+		return c.JSON(404, map[string]string{"detail": fmt.Sprintf("%s does not exist in the routing rules", prefix)})
 	}
 }
 
 func main() {
 	flag.StringVar(&routingFilePath, "fpath", LookupEnvOrString("CONFIG_FPATH", routingFilePath), "Path to routing json file")
+	flag.IntVar(&webPort, "port", LookupEnvOrInt("PORT", webPort), "Port for echo web server")
 
 	flag.Parse()
 
@@ -89,14 +102,8 @@ func main() {
 	log.Infof("Reading routing file at %s", routingFilePath)
 	weightedChoosers = readConfig(routingFilePath)
 
-	router := gin.Default()
-	router.GET("/:prefix", resolveUrl)
-	s := &http.Server{
-		Addr:           ":8080",
-		Handler:        router,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
-	}
-	s.ListenAndServe()
+	e := echo.New()
+	e.GET("/:prefix", resolveUrl)
+	e.Logger.Fatal(e.Start(fmt.Sprintf(":%v", webPort)))
+
 }

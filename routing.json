@@ -1,5 +1,5 @@
 {
-    "/vicuna": {
+    "/test1": {
         "upstreams": [
             {
                 "url": "http://10.20.10.10",
@@ -11,7 +11,7 @@
             }
         ]
     },
-    "/llama-2": {
+    "/test2": {
         "upstreams": [
             {
                 "url": "http://10.20.10.10",
