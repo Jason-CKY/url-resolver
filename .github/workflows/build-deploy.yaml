@@ -28,7 +28,7 @@ jobs:
       - name: Build and push the image
         run: |
           docker login --username Jason-CKY --password ${{ secrets.GH_PAT }} ghcr.io
-          docker build -f ./build/Dockerfile --tag ghcr.io/jason-cky/url-resolver:$GIT_TAG_NAME --target production .
+          docker build -f ./Dockerfile --tag ghcr.io/jason-cky/url-resolver:$GIT_TAG_NAME --target production .
           docker push ghcr.io/jason-cky/url-resolver:$GIT_TAG_NAME
           docker tag ghcr.io/jason-cky/url-resolver:$GIT_TAG_NAME ghcr.io/jason-cky/url-resolver:latest
           docker push ghcr.io/jason-cky/url-resolver:latest
