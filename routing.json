@@ -3,11 +3,13 @@
         "upstreams": [
             {
                 "url": "http://10.20.10.10",
-                "weight": 1
+                "weight": 1,
+                "healthcheck_endpoint": "http://localhost:8080/health"
             },
             {
                 "url": "https://test.example.site",
-                "weight": 1
+                "weight": 1,
+                "healthcheck_endpoint": "https://test.example.site/health"
             }
         ]
     },
@@ -15,11 +17,13 @@
         "upstreams": [
             {
                 "url": "http://10.20.10.10",
-                "weight": 1
+                "weight": 1,
+                "healthcheck_endpoint": "http://10.20.10.10/health"
             },
             {
                 "url": "https://test.example.site",
-                "weight": 20
+                "weight": 20,
+                "healthcheck_endpoint": "https://test.example.site/health"
             }
         ]
     }
