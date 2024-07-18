@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -85,7 +86,6 @@ func GetRandomChooser(routingRules map[string]RoutingRule, doHealthCheck bool) m
 
 	for prefix, routingRule := range routingRules {
 		var weightedChoices []weightedrand.Choice[string, int]
-
 		for i := 0; i < len(routingRule.Upstreams); i++ {
 			upstream := routingRule.Upstreams[i]
 			if (upstream.HealthcheckEndpoint != nil && upstream.Healthy) || !doHealthCheck {
@@ -125,12 +125,18 @@ func HealthCheck(healthCheckEndpoint string) bool {
 }
 
 func HealthCheckAll(routingRules map[string]RoutingRule) {
+	var wg sync.WaitGroup
 	for prefix := range routingRules {
 		for i := 0; i < len(routingRules[prefix].Upstreams); i++ {
 			if routingRules[prefix].Upstreams[i].HealthcheckEndpoint != nil {
-				routingRules[prefix].Upstreams[i].Healthy = HealthCheck(*routingRules[prefix].Upstreams[i].HealthcheckEndpoint)
+				wg.Add(1)
+				go func(endpoint string) {
+					defer wg.Done()
+					routingRules[prefix].Upstreams[i].Healthy = HealthCheck(*routingRules[prefix].Upstreams[i].HealthcheckEndpoint)
+				}(*routingRules[prefix].Upstreams[i].HealthcheckEndpoint)
 			}
 		}
+		wg.Wait()
 	}
 }
 
@@ -176,8 +182,10 @@ func main() {
 		}
 
 		go func() {
-			HealthCheckAll(routingRules)
-			time.Sleep(5 * time.Second)
+			for {
+				HealthCheckAll(routingRules)
+				time.Sleep(5 * time.Second)
+			}
 		}()
 	}
 
